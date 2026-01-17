@@ -41,7 +41,7 @@ def get_selected(group_key, labels, default=None):
 st.title("たみぷる　わざ入力補助ツール")
 
 selected_move = st.selectbox(
-    "わざ名検索",
+    "わざ名検索(わざを選択してから対象を選ぶ)",
     options=move_names,
     index=None,
     placeholder="技名を入力（部分一致）",
