@@ -38,7 +38,7 @@ def get_selected(group_key, labels, default=None):
 # =========================
 # UI: 技選択
 # =========================
-st.title("コメントリプル　わざ入力補助ツール")
+st.title("たみぷる　わざ入力補助ツール")
 
 selected_move = st.selectbox(
     "わざ名検索",
