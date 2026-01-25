@@ -20,94 +20,136 @@ moves = load_moves()
 move_names = list(moves.keys())
 
 # =========================
-# 共通ユーティリティ
+# 初期化
 # =========================
-def exclusive_toggle(group_key, labels, selected_label):
-    """
-    排他トグルの状態を session_state に反映
-    """
-    for l in labels:
-        st.session_state[f"{group_key}_{l}"] = (l == selected_label)
-
-def get_selected(group_key, labels, default=None):
-    for l in labels:
-        if st.session_state.get(f"{group_key}_{l}"):
-            return l
-    return default
+if "pokemon_names" not in st.session_state:
+    st.session_state.pokemon_names = ["", "", ""]
 
 # =========================
-# UI: 技選択
+# タイトル
 # =========================
-st.title("たみぷる　わざ入力補助ツール")
+st.title("民プル　投票コメント生成ツール")
 
-selected_move = st.selectbox(
-    "わざ名検索(わざを選択してから対象を選ぶ)",
-    options=move_names,
-    index=None,
-    placeholder="技名を入力（部分一致）",
-)
-
-if not selected_move:
-    st.stop()
-
-target_type = moves[selected_move]["target_type"]
-
-st.caption(f"対象タイプ: {target_type}")
-
+output_parts = []
 # =========================
-# UI: 使用者選択（2×3 排他）
+# 各ポケモンの入力
 # =========================
-st.subheader("わざ使用者")
 
-user_labels = ["1", "2", "3"]
-
-with st.container(border=True):
-    for row in range(1):
-        cols = st.columns(3)
-        for col, label in zip(cols, user_labels[row*3:(row+1)*3]):
-            with col:
-                st.toggle(
-                    label,
-                    key=f"user_{label}",
-                    on_change=exclusive_toggle,
-                    args=("user", user_labels, label),
-                )
-
-selected_user = get_selected("user", user_labels, "未選択")
-
-# =========================
-# UI: 対象選択（条件付き）
-# =========================
-st.subheader("わざ対象")
-
-target_labels = ["ア", "イ", "ウ", "1", "2", "3"]
-
-selected_target = ""
-
-if target_type in ("single",):
+for i in range(3):
+    position = str(i + 1)
+    default_target = ["Ａ", "Ｂ", "Ｃ"][i]
+    
+    st.subheader(f"ポケモン {position} の行動")
+    
     with st.container(border=True):
-        for row in range(2):
-            cols = st.columns(3)
-            for col, label in zip(cols, target_labels[row*3:(row+1)*3]):
-                with col:
-                    st.toggle(
-                        label,
-                        key=f"target_{label}",
-                        on_change=exclusive_toggle,
-                        args=("target", target_labels, label),
+        # 行動タイプ選択
+        action_type = st.radio(
+            "行動タイプ",
+            ["技", "交代", "ムーブ"],
+            key=f"action_type_{i}",
+            horizontal=True
+        )
+        
+        if action_type == "技":
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                selected_move = st.selectbox(
+                    "技名",
+                    options=move_names,
+                    index=None,
+                    placeholder="技を選択",
+                    key=f"move_{i}"
+                )
+            
+            with col2:
+                no_mega = st.checkbox(
+                    "メガシンカしない",
+                    key=f"no_mega_{i}"
+                )
+            
+            if selected_move:
+                target_type = moves[selected_move]["target_type"]
+                
+                # 対象選択（単体技の場合のみ）
+                if target_type == "single":
+                    st.caption("対象選択")
+                    target_options = ["省略(正面)", "Ａ", "Ｂ", "Ｃ", "１", "２", "３"]
+                    selected_target = st.radio(
+                        "対象",
+                        target_options,
+                        index=0,
+                        key=f"target_{i}",
+                        horizontal=True,
+                        label_visibility="collapsed"
                     )
+                    
+                    # 出力生成
+                    mega_mark = "？" if no_mega else ""
+                    if selected_target == "省略(正面)":
+                        output_parts.append(f"{position}{mega_mark}{selected_move}")
+                    else:
+                        output_parts.append(f"{position}{mega_mark}{selected_move}{selected_target}")
+                else:
+                    st.info(f"この技は対象選択不要（{target_type}）")
+                    mega_mark = "？" if no_mega else ""
+                    output_parts.append(f"{position}{mega_mark}{selected_move}")
+            else:
+                output_parts.append("")
+        
+        elif action_type == "交代":
+            pokemon_name = st.text_input(
+                "交代先ポケモン名",
+                key=f"switch_{i}",
+                placeholder="例: モロバレル"
+            )
+            
+            if pokemon_name:
+                st.session_state.pokemon_names[i] = pokemon_name
+                output_parts.append(f"{position}{pokemon_name}")
+            else:
+                output_parts.append("")
+        
+        elif action_type == "ムーブ":
+            output_parts.append(f"{position}ムーブ")
 
-    selected_target = get_selected("target", target_labels, "")
-else:
-    st.info("この技は対象選択が不要です")
 
 # =========================
-# 出力生成
+# 出力
 # =========================
-if target_type in ("all", "self", "none", "auto"):
-    output = f"{selected_user}{selected_move} "
-else:
-    output = f"{selected_user}{selected_move}{selected_target}"
+st.subheader("生成された投票コメント")
 
-st.subheader("出力")
-st.text_input("結果", output)
+# 空の部分を除外
+final_output = " ".join([part for part in output_parts if part])
+
+if final_output:
+    st.code(final_output, language=None)
+    st.button("📋 クリップボードにコピー", 
+              on_click=lambda: st.write("※ブラウザの機能を使ってコピーしてください"))
+else:
+    st.info("行動を選択してください")
+
+# =========================
+# 補足情報
+# =========================
+with st.expander("📖 投票ルール詳細"):
+    st.markdown("""
+    ### ポケモンの位置
+    ```
+    奥　側　Ａ　Ｂ　Ｃ
+    手前側　１　２　３
+    ```
+    
+    ### 投票例
+    - `1まもる 2でんこうせっかＢ 3モロバレル`
+      - 1: まもる
+      - 2: Bにでんこうせっか
+      - 3: モロバレルに交代
+    
+    ### 補足
+    - 対象省略時は正面を攻撃（1→Ａ、2→Ｂ、3→Ｃ）
+    - 交代: ポケモン名を直接記載
+    - ムーブ: `1ムーブ` または `3ムーブ`
+    - メガシンカしない: 技名の前に`？`マークをつける
+    - 半角全角どちらでもOK
+    """)
